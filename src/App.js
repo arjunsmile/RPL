@@ -198,7 +198,7 @@ function App() {
   const renderPwModal = () => {
     if (!loginTarget) return null;
     const isAdmin = loginTarget==="admin";
-    const team = !isAdmin ? TEAMS_INIT.find(t=>t.id===loginTarget) : null;
+    const team = !isAdmin ? state.teams.find(t=>t.id===loginTarget) : null;
     const accent = isAdmin ? "#f7c948" : team?.color;
     const key = String(loginTarget);
     const isLocked = locked[key] && Date.now() < locked[key];

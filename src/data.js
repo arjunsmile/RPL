@@ -1,4 +1,4 @@
-export const ALL_PLAYERS = [
+export let ALL_PLAYERS = [
   { name:"Dev Rajput",role:"Batsman",dept:"Retail Sales",type:"Field",gender:"M"},
   { name:"Amiya Mandal",role:"Batsman",dept:"Retail Sales",type:"Field",gender:"M"},
   { name:"Adrash Kumar",role:"Batsman",dept:"Retail Sales",type:"Field",gender:"M"},

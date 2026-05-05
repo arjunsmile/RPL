@@ -60,6 +60,7 @@ function App() {
   const [captainTab, setCaptainTab] = useState("auction");
   const [playerFilter, setPlayerFilter] = useState("all");
   const [roleFilter, setRoleFilter] = useState("All");
+  const [audTab, setAudTab] = useState("auction");
   // Player edit states
   const [editingPlayer, setEditingPlayer] = useState(null);
   const [epName, setEpName] = useState("");
@@ -335,7 +336,6 @@ function App() {
 
   // ══════════ AUDIENCE ══════════
   if(portal==="audience"){
-    const [audTab, setAudTab] = useState("auction");
     return(<div style={S.app}><style>{globalCSS}</style>
       <div style={{...S.topBar,borderBottom:"3px solid #2980b9"}}>
         <div style={{display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:24}}>📺</span><div><div style={S.portalLabel}>AUDIENCE VIEW</div><div style={{fontFamily:"'Oswald',sans-serif",fontSize:20,fontWeight:700,color:"#5dade2"}}>RPL AUCTION LIVE</div></div></div>

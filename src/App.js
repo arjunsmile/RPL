@@ -326,11 +326,101 @@ function App() {
       <button style={{...S.loginBtn,background:"linear-gradient(135deg,#f7c948,#e6a817)",color:"#0b0f1a"}} onClick={()=>setLoginTarget("admin")}><span style={{fontSize:22}}>👑</span><div style={{flex:1}}><div style={{fontWeight:700,fontSize:15}}>ADMIN / AUCTIONEER</div><div style={{fontSize:11,opacity:0.7}}>Control auction</div></div><span style={{fontSize:16,opacity:0.6}}>🔒</span></button>
       <div style={{fontSize:12,color:"#5a6a88",margin:"20px 0 10px",letterSpacing:2}}>CAPTAIN LOGIN</div>
       <div style={S.captainGrid}>{state.teams.map(t=>(<button key={t.id} style={{...S.captainBtn,borderColor:t.color}} onClick={()=>setLoginTarget(t.id)}><div style={{width:10,height:10,borderRadius:"50%",background:t.color}} /><span style={{color:t.color,fontWeight:600,flex:1,textAlign:"left"}}>{t.name}</span><span style={{fontSize:13,opacity:0.5}}>🔒</span></button>))}</div>
-      <div style={{marginTop:24,padding:"14px 16px",background:"#0d1320",borderRadius:10,border:"1px solid #1a253d"}}>
+      <button style={{...S.loginBtn,background:"linear-gradient(135deg,#2980b9,#1a5276)",color:"#fff",marginTop:20}} onClick={()=>setPortal("audience")}><span style={{fontSize:22}}>👀</span><div style={{flex:1}}><div style={{fontWeight:700,fontSize:15}}>WATCH LIVE</div><div style={{fontSize:11,opacity:0.7}}>Audience view — no login needed</div></div><span style={{fontSize:16}}>📺</span></button>
+      <div style={{marginTop:16,padding:"14px 16px",background:"#0d1320",borderRadius:10,border:"1px solid #1a253d"}}>
         <div style={{display:"flex",justifyContent:"space-around",textAlign:"center"}}>{[{l:"PLAYERS",v:players.length,c:"#fff"},{l:"SOLD",v:totalSold,c:"#27ae60"},{l:"PENDING",v:totalPending,c:"#f7c948"}].map(s=>(<div key={s.l}><div style={{fontFamily:"'Oswald',sans-serif",fontSize:20,fontWeight:700,color:s.c}}>{s.v}</div><div style={{fontSize:10,color:"#7a8ea8"}}>{s.l}</div></div>))}</div>
       </div>
     </div>
   </div>);}
+
+  // ══════════ AUDIENCE ══════════
+  if(portal==="audience"){
+    const [audTab, setAudTab] = useState("auction");
+    return(<div style={S.app}><style>{globalCSS}</style>
+      <div style={{...S.topBar,borderBottom:"3px solid #2980b9"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:24}}>📺</span><div><div style={S.portalLabel}>AUDIENCE VIEW</div><div style={{fontFamily:"'Oswald',sans-serif",fontSize:20,fontWeight:700,color:"#5dade2"}}>RPL AUCTION LIVE</div></div></div>
+        <div style={{display:"flex",alignItems:"center",gap:12}}>
+          <div style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:8,height:8,borderRadius:"50%",background:"#e74c3c",animation:"pulse 1.5s infinite"}} /><span style={{fontSize:12,color:"#e74c3c",fontWeight:600}}>LIVE</span></div>
+          <button style={S.logoutBtn} onClick={()=>setPortal(null)}>← Back</button>
+        </div>
+      </div>
+      <div style={{display:"flex",gap:4,padding:"8px 20px",background:"#0d1320"}}>
+        <TabBtn active={audTab==="auction"} onClick={()=>setAudTab("auction")}>LIVE AUCTION</TabBtn>
+        <TabBtn active={audTab==="players"} onClick={()=>setAudTab("players")}>PLAYERS</TabBtn>
+        <TabBtn active={audTab==="teams"} onClick={()=>setAudTab("teams")}>TEAMS</TabBtn>
+      </div>
+      <div style={S.mainPad}>
+        <StatsBar />
+
+        {audTab==="auction"&&(<>
+          {state.phase==="live"&&curPlayer&&(<div style={{...S.liveCard,border:"2px solid #2980b944"}}>
+            <div style={S.liveTag}>🔴 LIVE AUCTION IN PROGRESS</div>
+            <div style={S.playerNameBig}>{curPlayer.name}{curPlayer.gender==="F"&&<span style={{fontSize:16,color:"#e91e8f"}}> ♀</span>}</div>
+            <div style={S.metaRow}>
+              <span style={{...S.badge,background:"#f7c94822",color:"#f7c948"}}>{ROLE_ICON[curPlayer.role]} {curPlayer.role}</span>
+              <span style={{...S.badge,background:"#5dade222",color:"#5dade2"}}>{curPlayer.dept}</span>
+              <span style={{...S.badge,background:curPlayer.type==="Field"?"#e74c3c22":"#27ae6022",color:curPlayer.type==="Field"?"#e74c3c":"#27ae60"}}>{curPlayer.type}</span>
+              {curPlayer.gender==="F"&&<span style={{...S.badge,background:"#e91e8f22",color:"#e91e8f"}}>👩 Women</span>}
+            </div>
+            <div style={{fontSize:11,color:"#7a8ea8"}}>Base Value: {fmt(getBasePrice(curPlayer.id))}</div>
+            <div style={S.bidLabel}>CURRENT BID</div>
+            <div style={{...S.bidBig,fontSize:56}}>{fmt(state.currentBid)}</div>
+            {leadTeam&&<div style={{...S.leadTag,background:leadTeam.color+"28",color:leadTeam.color,border:`1px solid ${leadTeam.color}55`,fontSize:16,padding:"8px 24px"}}>{leadTeam.name} is leading!</div>}
+            {state.timerEnd&&<div style={{margin:"18px 0 8px"}}><div style={{...S.timerBar,height:8}}><div style={{...S.timerFill,width:`${(timeLeft/(config.timerDuration||15))*100}%`,background:timeLeft<=3?"#e74c3c":"#f7c948"}} /></div><div style={{fontSize:16,color:timeLeft<=3?"#e74c3c":"#7a8ea8",fontWeight:700,marginTop:4}}>{timeLeft}s</div></div>}
+
+            {/* Team bidding status */}
+            <div style={{marginTop:20,display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+              {state.teams.map(t=>(<div key={t.id} style={{padding:"10px 8px",borderRadius:8,border:`2px solid ${t.id===state.highestBidder?t.color:"#1e2d4a"}`,background:t.id===state.highestBidder?t.color+"15":"#111827",textAlign:"center"}}>
+                <div style={{fontFamily:"'Oswald',sans-serif",fontSize:12,color:t.color,fontWeight:600}}>{t.name}</div>
+                <div style={{fontSize:11,color:"#7a8ea8"}}>{fmt(t.budget)}</div>
+                <div style={{fontSize:10,color:"#5a6a88"}}>{t.players.length}/{maxSq}</div>
+                {t.id===state.highestBidder&&<div style={{fontSize:10,color:t.color,fontWeight:700,marginTop:2}}>👆 LEADING</div>}
+              </div>))}
+            </div>
+          </div>)}
+
+          {state.phase==="waiting"&&<div style={S.waitCard}><div style={{fontSize:48}}>⏳</div><div style={{fontFamily:"'Oswald',sans-serif",fontSize:26,color:"#fff",marginTop:12}}>WAITING FOR NEXT PLAYER</div><div style={{fontSize:14,color:"#7a8ea8",marginTop:6}}>The auction will begin shortly...</div></div>}
+          {state.phase==="sold"&&<div style={S.waitCard}><div style={{fontSize:48}}>🎉</div><div style={{fontFamily:"'Oswald',sans-serif",fontSize:30,color:"#27ae60",marginTop:8}}>SOLD!</div>{state.soldLog.length>0&&(()=>{const l=state.soldLog[state.soldLog.length-1];const p=getPlayer(l.playerId);const t=state.teams.find(x=>x.id===l.teamId);return<div style={{marginTop:12}}><div style={{fontSize:22,color:"#fff",fontFamily:"'Oswald',sans-serif"}}>{p?.name}</div><div style={{fontSize:16,color:"#7a8ea8",marginTop:4}}>to <strong style={{color:t?.color,fontSize:18}}>{t?.name}</strong> for <strong style={{color:"#f7c948",fontSize:18}}>{fmt(l.price)}</strong></div></div>;})()}</div>}
+          {state.phase==="unsold"&&<div style={S.waitCard}><div style={{fontSize:48}}>😔</div><div style={{fontFamily:"'Oswald',sans-serif",fontSize:30,color:"#c0392b",marginTop:8}}>UNSOLD</div></div>}
+          {state.phase==="done"&&<div style={S.waitCard}><div style={{fontSize:48}}>🏆</div><div style={{fontFamily:"'Oswald',sans-serif",fontSize:30,color:"#f7c948",marginTop:8}}>AUCTION COMPLETE!</div></div>}
+
+          {/* Recent sales ticker */}
+          {state.soldLog.length>0&&(<div style={{marginTop:20}}>
+            <div style={{fontFamily:"'Oswald',sans-serif",fontSize:14,color:"#7a8ea8",letterSpacing:1,marginBottom:8}}>RECENT SALES</div>
+            <div style={{display:"flex",flexDirection:"column",gap:4,maxHeight:200,overflowY:"auto"}}>
+              {[...state.soldLog].reverse().slice(0,10).map((l,i)=>{const p=getPlayer(l.playerId);const t=state.teams.find(x=>x.id===l.teamId);return(<div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 12px",background:"#111827",border:"1px solid #1e2d4a",borderRadius:8}}>
+                <div style={{display:"flex",alignItems:"center",gap:8}}><span>{ROLE_ICON[p?.role]}</span><span style={{fontSize:13}}>{p?.name}</span></div>
+                <div style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:12,fontWeight:700,color:t?.color}}>{t?.name}</span><span style={{fontSize:12,fontWeight:700,color:"#f7c948"}}>{fmt(l.price)}</span></div>
+              </div>);})}
+            </div>
+          </div>)}
+        </>)}
+
+        {audTab==="players"&&<PlayerList showValue={true} />}
+
+        {audTab==="teams"&&(<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:12}}>
+          {state.teams.map(t=>(<div key={t.id} style={{background:"#111827",border:"1px solid #1e2d4a",borderTop:`3px solid ${t.color}`,borderRadius:10,overflow:"hidden"}}>
+            <div style={{padding:"12px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:"1px solid #1e2d4a"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}><div style={{width:12,height:12,borderRadius:"50%",background:t.color}} /><span style={{fontFamily:"'Oswald',sans-serif",fontSize:15,fontWeight:600,color:"#fff"}}>{t.name}</span></div>
+              <div style={{textAlign:"right"}}><div style={{fontFamily:"'Oswald',sans-serif",fontSize:16,fontWeight:700,color:t.color}}>{fmt(t.budget)}</div><div style={{fontSize:10,color:"#7a8ea8"}}>remaining</div></div>
+            </div>
+            <div style={{padding:"4px 10px",borderBottom:"1px solid #1e2d4a",fontSize:11,color:"#7a8ea8",display:"flex",justifyContent:"space-between"}}>
+              <span>Spent: {fmt(t.players.reduce((a,p)=>a+p.price,0))}</span>
+              <TeamCompliance team={t} />
+            </div>
+            <div style={{padding:"6px 10px",maxHeight:200,overflowY:"auto"}}>
+              {t.players.length===0&&<div style={{color:"#3a4a6a",fontSize:12,padding:12,textAlign:"center"}}>No players yet</div>}
+              {t.players.map((p,i)=>(<div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"5px 6px",borderRadius:5,marginBottom:2}}>
+                <div style={{display:"flex",alignItems:"center",gap:6}}><span style={{fontSize:12}}>{ROLE_ICON[p.role]}</span><span style={{fontSize:12}}>{p.name}{p.gender==="F"&&<span style={{color:"#e91e8f"}}> ♀</span>}</span>{t.captain===i&&<span style={{...S.cBadge,background:"#f7c948",color:"#0b0f1a"}}>C</span>}{t.viceCaptain===i&&<span style={{...S.cBadge,background:"#5dade2",color:"#0b0f1a"}}>VC</span>}</div>
+                <span style={{fontSize:10,color:"#7a8ea8"}}>{fmt(p.price)}</span>
+              </div>))}
+            </div>
+            <div style={{padding:"6px 14px",borderTop:"1px solid #1e2d4a",fontSize:11,color:"#7a8ea8",display:"flex",justifyContent:"space-between"}}><span>{t.players.length}/{maxSq}</span><span>🏏{t.players.filter(p=>p.role==="Batsman").length} ⭐{t.players.filter(p=>p.role==="All-Rounder").length} 🎯{t.players.filter(p=>p.role==="Bowler").length}</span></div>
+          </div>))}
+        </div>)}
+      </div>
+    </div>);
+  }
 
   // ══════════ CAPTAIN ══════════
   if(typeof portal==="number"){

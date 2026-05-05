@@ -76,12 +76,12 @@ export let ALL_PLAYERS = [
 ].map((p, i) => ({ ...p, id: i }));
 
 export const TEAMS_INIT = [
-  { id:1, name:"Thunder Strikers", color:"#e74c3c", budget:1000000, players:[], captain:null, viceCaptain:null },
-  { id:2, name:"Royal Warriors", color:"#2980b9", budget:1000000, players:[], captain:null, viceCaptain:null },
-  { id:3, name:"Green Titans", color:"#27ae60", budget:1000000, players:[], captain:null, viceCaptain:null },
-  { id:4, name:"Golden Eagles", color:"#f39c12", budget:1000000, players:[], captain:null, viceCaptain:null },
-  { id:5, name:"Purple Storm", color:"#8e44ad", budget:1000000, players:[], captain:null, viceCaptain:null },
-  { id:6, name:"Orange Blazers", color:"#e67e22", budget:1000000, players:[], captain:null, viceCaptain:null },
+  { id:1, name:"RCB", color:"#e74c3c", budget:1000000, players:[], captain:null, viceCaptain:null },
+  { id:2, name:"Remidio Power Star", color:"#2980b9", budget:1000000, players:[], captain:null, viceCaptain:null },
+  { id:3, name:"Remidio Falcon", color:"#e67e22", budget:1000000, players:[], captain:null, viceCaptain:null },
+  { id:4, name:"Remidio Strikers", color:"#f39c12", budget:1000000, players:[], captain:null, viceCaptain:null },
+  { id:5, name:"Remidio Rangers", color:"#8e44ad", budget:1000000, players:[], captain:null, viceCaptain:null },
+  { id:6, name:"Royal Warriors", color:"#e67e22", budget:1000000, players:[], captain:null, viceCaptain:null },
 ];
 
 export const DEFAULT_PASSWORDS = {
@@ -97,6 +97,7 @@ export const DEFAULT_PASSWORDS = {
 export const ROLE_ICON = { Batsman: "🏏", "All-Rounder": "⭐", Bowler: "🎯" };
 export const BASE_PRICE = 50000;
 export const BID_INC = 5000;
-export const MAX_SQUAD = 12;
+export const MAX_SQUAD = 15;
+export const MIN_SQUAD = 11;
 export const TIMER_DURATION = 15;
-export const MIN_WOMEN = 1;
+export const MIN_WOMEN = 2;

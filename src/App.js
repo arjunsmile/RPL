@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { storage } from './firebase';
-import { ALL_PLAYERS as INIT_PLAYERS, TEAMS_INIT, DEFAULT_PASSWORDS, ROLE_ICON, BASE_PRICE, BID_INC, MAX_SQUAD, TIMER_DURATION, MIN_WOMEN } from './data';
+import { ALL_PLAYERS as INIT_PLAYERS, TEAMS_INIT, DEFAULT_PASSWORDS, ROLE_ICON, BASE_PRICE, BID_INC, MAX_SQUAD, MIN_SQUAD, TIMER_DURATION, MIN_WOMEN } from './data';
 
 const STATE_KEY = "state";
 const PW_KEY = "passwords";
 const CONFIG_KEY = "config";
 const PLAYERS_KEY = "players";
 
-const defaultConfig = () => ({ baseBudget:1000000, basePrice:50000, bidIncrement:5000, maxSquad:12, minWomen:1, timerDuration:15, playerValues:{} });
+const defaultConfig = () => ({ baseBudget:1000000, basePrice:50000, bidIncrement:5000, maxSquad:15, minSquad:11, minWomen:2, timerDuration:15, playerValues:{} });
 const defaultState = (cfg, players) => {
   const budget = cfg?.baseBudget || 1000000;
   const pl = players || INIT_PLAYERS;
@@ -17,16 +17,23 @@ const fmt = (n) => { if(!n&&n!==0) return "₹0"; if(n>=100000) return `₹${(n/
 
 const checkEligibility = (team, currentPlayer, nextBid, config) => {
   const maxSq=config.maxSquad||MAX_SQUAD; const minW=config.minWomen||MIN_WOMEN; const bp=config.basePrice||BASE_PRICE;
+  const minSq=config.minSquad||MIN_SQUAD||11;
   if(team.players.length>=maxSq) return {eligible:false,reason:"Squad full"};
   if(team.budget<nextBid) return {eligible:false,reason:"Insufficient budget"};
-  const slotsLeft=maxSq-team.players.length-1;
+  // Must reserve budget to fill minimum squad (11 players) at base price
+  const currentCount=team.players.length+1; // +1 for this bid
+  const minSlotsStillNeeded=Math.max(0,minSq-currentCount);
+  const reserveNeeded=minSlotsStillNeeded*bp;
+  if(team.budget-nextBid<reserveNeeded) return {eligible:false,reason:`Must reserve ${fmt(reserveNeeded)} for ${minSlotsStillNeeded} more (min ${minSq})`};
+  // Women check
   const wc=team.players.filter(p=>p.gender==="F").length;
   const isW=currentPlayer?.gender==="F";
   const wAfter=wc+(isW?1:0);
   const wNeeded=Math.max(0,minW-wAfter);
-  const reserve=slotsLeft*bp;
-  if(team.budget-nextBid<reserve) return {eligible:false,reason:`Reserve ${fmt(reserve)} for ${slotsLeft} slots`};
-  if(wNeeded>0&&!isW&&slotsLeft<wNeeded) return {eligible:false,reason:`Need ${wNeeded} women player(s)`};
+  if(wNeeded>0&&!isW){
+    const slotsAfterThis=maxSq-currentCount;
+    if(slotsAfterThis<wNeeded) return {eligible:false,reason:`Need ${wNeeded} women player(s)`};
+  }
   return {eligible:true,reason:""};
 };
 
@@ -202,17 +209,17 @@ function App() {
   const RulesPanel=()=>(<div style={{background:"linear-gradient(145deg,#111827,#162035)",border:"1px solid #f7c94844",borderRadius:14,padding:24,marginBottom:20}}>
     <div style={{fontFamily:"'Oswald',sans-serif",fontSize:18,color:"#f7c948",letterSpacing:1,marginBottom:16}}>📋 AUCTION RULES</div>
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10,marginBottom:16}}>
-      {[{i:"💰",l:"Team Purse",v:fmt(config.baseBudget||1000000)},{i:"🏷️",l:"Base Price",v:fmt(config.basePrice||50000)},{i:"📈",l:"Bid Increment",v:fmt(config.bidIncrement||5000)},{i:"👥",l:"Squad Size",v:`${config.maxSquad||12}`},{i:"👩",l:"Min Women",v:`${config.minWomen||1}`},{i:"⏱️",l:"Timer",v:`${config.timerDuration||15}s`}].map(r=>(<div key={r.l} style={{background:"#0d132088",borderRadius:8,padding:"10px 14px",border:"1px solid #1e2d4a"}}><div style={{fontSize:11,color:"#7a8ea8"}}>{r.i} {r.l}</div><div style={{fontFamily:"'Oswald',sans-serif",fontSize:18,fontWeight:700,color:"#fff",marginTop:2}}>{r.v}</div></div>))}
+      {[{i:"💰",l:"Team Purse",v:fmt(config.baseBudget||1000000)},{i:"🏷️",l:"Base Price",v:fmt(config.basePrice||50000)},{i:"📈",l:"Bid Increment",v:fmt(config.bidIncrement||5000)},{i:"👥",l:"Min Squad",v:`${config.minSquad||11}`},{i:"👥",l:"Max Squad",v:`${config.maxSquad||15}`},{i:"👩",l:"Min Women",v:`${config.minWomen||2}`},{i:"⏱️",l:"Timer",v:`${config.timerDuration||15}s`}].map(r=>(<div key={r.l+r.v} style={{background:"#0d132088",borderRadius:8,padding:"10px 14px",border:"1px solid #1e2d4a"}}><div style={{fontSize:11,color:"#7a8ea8"}}>{r.i} {r.l}</div><div style={{fontFamily:"'Oswald',sans-serif",fontSize:18,fontWeight:700,color:"#fff",marginTop:2}}>{r.v}</div></div>))}
     </div>
     <div style={{fontSize:13,color:"#c0cee0",lineHeight:1.8,paddingLeft:8}}>
-      1. Each team has <strong style={{color:"#f7c948"}}>{fmt(config.baseBudget||1000000)}</strong> to buy {config.maxSquad||12} players.<br/>
-      2. Base price: <strong style={{color:"#f7c948"}}>{fmt(config.basePrice||50000)}</strong>. Captain base prices may differ.<br/>
-      3. Bid increment: <strong style={{color:"#f7c948"}}>{fmt(config.bidIncrement||5000)}</strong>.<br/>
-      4. <strong style={{color:"#f7c948"}}>{config.timerDuration||15}s</strong> to counter-bid after each bid.<br/>
-      5. <strong style={{color:"#e74c3c"}}>Mandatory:</strong> At least <strong style={{color:"#f7c948"}}>{config.minWomen||1} women player(s)</strong> per team.<br/>
-      6. Budget must reserve enough for remaining slots at base price.<br/>
-      7. Bidding blocked if team can't meet requirements.<br/>
-      8. Captains assigned before auction get auto-bought at their base price.
+      1. Each team has <strong style={{color:"#f7c948"}}>{fmt(config.baseBudget||1000000)}</strong> to buy players.<br/>
+      2. Minimum <strong style={{color:"#e74c3c"}}>{config.minSquad||11} players</strong> required, maximum <strong style={{color:"#f7c948"}}>{config.maxSquad||15}</strong>.<br/>
+      3. Base price: <strong style={{color:"#f7c948"}}>{fmt(config.basePrice||50000)}</strong>. Captain prices may differ.<br/>
+      4. Bid increment: <strong style={{color:"#f7c948"}}>{fmt(config.bidIncrement||5000)}</strong>.<br/>
+      5. <strong style={{color:"#f7c948"}}>{config.timerDuration||15}s</strong> to counter-bid after each bid.<br/>
+      6. <strong style={{color:"#e74c3c"}}>Mandatory:</strong> At least <strong style={{color:"#f7c948"}}>{config.minWomen||2} women player(s)</strong> per team.<br/>
+      7. Budget must reserve enough to fill minimum {config.minSquad||11} slots at base price.<br/>
+      8. Bidding blocked if team can't meet requirements.
     </div>
     <button onClick={()=>setShowRules(false)} style={{...S.actionBtn,background:"#1e2d4a",color:"#7a8ea8",marginTop:14}}>Close</button>
   </div>);
@@ -304,10 +311,10 @@ function App() {
   </div>);};
 
   // Config Panel
-  const ConfigPanel=()=>{const [lc,setLc]=useState({baseBudget:config.baseBudget||1000000,basePrice:config.basePrice||50000,bidIncrement:config.bidIncrement||5000,maxSquad:config.maxSquad||12,minWomen:config.minWomen||1,timerDuration:config.timerDuration||15});const[msg,setMsg]=useState("");
+  const ConfigPanel=()=>{const [lc,setLc]=useState({baseBudget:config.baseBudget||1000000,basePrice:config.basePrice||50000,bidIncrement:config.bidIncrement||5000,minSquad:config.minSquad||11,maxSquad:config.maxSquad||15,minWomen:config.minWomen||2,timerDuration:config.timerDuration||15});const[msg,setMsg]=useState("");
     return(<div style={{background:"#111827",border:"1px solid #1e2d4a",borderRadius:12,padding:20,marginBottom:20}}><div style={{fontFamily:"'Oswald',sans-serif",fontSize:16,color:"#f7c948",letterSpacing:1,marginBottom:14}}>⚙️ SETTINGS</div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:10,marginBottom:14}}>
-        {[{k:"baseBudget",l:"Team Budget (₹)",i:"💰"},{k:"basePrice",l:"Base Price (₹)",i:"🏷️"},{k:"bidIncrement",l:"Increment (₹)",i:"📈"},{k:"maxSquad",l:"Max Squad",i:"👥"},{k:"minWomen",l:"Min Women",i:"👩"},{k:"timerDuration",l:"Timer (sec)",i:"⏱️"}].map(f=>(<div key={f.k} style={{background:"#0d1320",border:"1px solid #1a253d",borderRadius:8,padding:"8px 12px"}}><div style={{fontSize:11,color:"#7a8ea8",marginBottom:4}}>{f.i} {f.l}</div><input type="number" value={lc[f.k]} onChange={e=>setLc({...lc,[f.k]:parseInt(e.target.value)||0})} style={{width:"100%",padding:"6px 8px",borderRadius:6,border:"1px solid #253554",background:"#131b2e",color:"#f7c948",fontSize:15,fontFamily:"'Oswald',sans-serif",fontWeight:700,outline:"none",boxSizing:"border-box"}} /></div>))}
+        {[{k:"baseBudget",l:"Team Budget (₹)",i:"💰"},{k:"basePrice",l:"Base Price (₹)",i:"🏷️"},{k:"bidIncrement",l:"Increment (₹)",i:"📈"},{k:"minSquad",l:"Min Squad",i:"📋"},{k:"maxSquad",l:"Max Squad",i:"👥"},{k:"minWomen",l:"Min Women",i:"👩"},{k:"timerDuration",l:"Timer (sec)",i:"⏱️"}].map(f=>(<div key={f.k} style={{background:"#0d1320",border:"1px solid #1a253d",borderRadius:8,padding:"8px 12px"}}><div style={{fontSize:11,color:"#7a8ea8",marginBottom:4}}>{f.i} {f.l}</div><input type="number" value={lc[f.k]} onChange={e=>setLc({...lc,[f.k]:parseInt(e.target.value)||0})} style={{width:"100%",padding:"6px 8px",borderRadius:6,border:"1px solid #253554",background:"#131b2e",color:"#f7c948",fontSize:15,fontFamily:"'Oswald',sans-serif",fontWeight:700,outline:"none",boxSizing:"border-box"}} /></div>))}
       </div>
       <div style={{display:"flex",alignItems:"center",gap:12}}><button onClick={async()=>{await updateConfig(lc);setMsg("Saved! Reset to apply.");setTimeout(()=>setMsg(""),3000);}} style={{...S.actionBtn,background:"#f7c948",color:"#0b0f1a"}}>Save</button><button onClick={()=>setConfigMgmt(false)} style={{...S.actionBtn,background:"#1e2d4a",color:"#7a8ea8"}}>Close</button>{msg&&<span style={{fontSize:12,color:"#27ae60",fontWeight:600}}>{msg}</span>}</div>
     </div>);};

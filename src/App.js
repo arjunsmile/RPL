@@ -15,13 +15,19 @@ const defaultState = (cfg, players) => {
 };
 const fmt = (n) => { if(!n&&n!==0) return "₹0"; if(n>=100000) return `₹${(n/100000).toFixed(n%100000===0?0:1)}L`; if(n>=1000) return `₹${(n/1000).toFixed(0)}K`; return `₹${n.toLocaleString()}`; };
 
+const FIELD_ONLY_TEAMS = [5, 6]; // Remidio Rangers, Royal Warriors
+const HO_ONLY_TEAMS = [1, 2, 3, 4]; // RCB, Remidio Power Star, Remidio Falcon, Remidio Strikers
+
 const checkEligibility = (team, currentPlayer, nextBid, config) => {
   const maxSq=config.maxSquad||MAX_SQUAD; const minW=config.minWomen||MIN_WOMEN; const bp=config.basePrice||BASE_PRICE;
   const minSq=config.minSquad||MIN_SQUAD||11;
   if(team.players.length>=maxSq) return {eligible:false,reason:"Squad full"};
   if(team.budget<nextBid) return {eligible:false,reason:"Insufficient budget"};
-  // Must reserve budget to fill minimum squad (11 players) at base price
-  const currentCount=team.players.length+1; // +1 for this bid
+  // Team-type restriction: Field teams can only bid Field, HO teams can only bid HO
+  if(FIELD_ONLY_TEAMS.includes(team.id) && currentPlayer?.type==="HO") return {eligible:false,reason:"Field team — HO players not allowed"};
+  if(HO_ONLY_TEAMS.includes(team.id) && currentPlayer?.type==="Field") return {eligible:false,reason:"HO team — Field players not allowed"};
+  // Must reserve budget to fill minimum squad at base price
+  const currentCount=team.players.length+1;
   const minSlotsStillNeeded=Math.max(0,minSq-currentCount);
   const reserveNeeded=minSlotsStillNeeded*bp;
   if(team.budget-nextBid<reserveNeeded) return {eligible:false,reason:`Must reserve ${fmt(reserveNeeded)} for ${minSlotsStillNeeded} more (min ${minSq})`};
@@ -87,6 +93,10 @@ function App() {
   const [apType, setApType] = useState("HO");
   const [apBasePrice, setApBasePrice] = useState(50000);
   const [playerMsg, setPlayerMsg] = useState("");
+  // Unsold management
+  const [showUnsoldMgmt, setShowUnsoldMgmt] = useState(false);
+  const [unsoldAssignTeam, setUnsoldAssignTeam] = useState({});
+  const [unsoldAssignPrice, setUnsoldAssignPrice] = useState({});
 
   // Firebase
   useEffect(() => {
@@ -192,6 +202,52 @@ function App() {
     setPlayerMsg("Player removed!");setTimeout(()=>setPlayerMsg(""),3000);
   };
 
+  // ── Unsold Player Management ──
+  const reBidUnsold = async (pid) => {
+    // Move unsold player back to pool for re-auction
+    await update({
+      unsoldIds: state.unsoldIds.filter(id => id !== pid),
+      pool: [...state.pool, pid],
+    });
+    setPlayerMsg("Player added back to auction pool!");setTimeout(()=>setPlayerMsg(""),3000);
+  };
+
+  const assignUnsoldToTeam = async (pid) => {
+    const tid = unsoldAssignTeam[pid];
+    const price = unsoldAssignPrice[pid] || config.basePrice || BASE_PRICE;
+    if (!tid) return;
+    const team = state.teams.find(t => t.id === parseInt(tid));
+    const player = getPlayer(pid);
+    if (!team || !player) return;
+    if (team.budget < price) { setPlayerMsg("Team doesn't have enough budget!"); setTimeout(()=>setPlayerMsg(""),3000); return; }
+    if (team.players.length >= (config.maxSquad || MAX_SQUAD)) { setPlayerMsg("Team squad is full!"); setTimeout(()=>setPlayerMsg(""),3000); return; }
+
+    const newTeams = state.teams.map(t => {
+      if (t.id === parseInt(tid)) {
+        return {...t, budget: t.budget - price, players: [...t.players, {...player, price}]};
+      }
+      return t;
+    });
+    await update({
+      teams: newTeams,
+      unsoldIds: state.unsoldIds.filter(id => id !== pid),
+      soldLog: [...state.soldLog, {playerId: pid, teamId: parseInt(tid), price}],
+    });
+    setUnsoldAssignTeam(p => ({...p, [pid]: ""}));
+    setUnsoldAssignPrice(p => ({...p, [pid]: ""}));
+    setPlayerMsg(`${player.name} assigned to ${team.name} for ${fmt(price)}!`);setTimeout(()=>setPlayerMsg(""),3000);
+  };
+
+  // ── Live Settings Update (without reset) ──
+  const updateTeamBudgets = async (newBudget) => {
+    // Only update teams that haven't spent anything
+    const newTeams = state.teams.map(t => {
+      const spent = t.players.reduce((a, p) => a + p.price, 0);
+      return {...t, budget: newBudget - spent};
+    });
+    await update({teams: newTeams});
+  };
+
   const curPlayer = state.currentPlayerId!==null?getPlayer(state.currentPlayerId):null;
   const leadTeam = state.highestBidder?state.teams.find(t=>t.id===state.highestBidder):null;
   const myTeam = typeof portal==="number"?state.teams.find(t=>t.id===portal):null;
@@ -219,7 +275,10 @@ function App() {
       5. <strong style={{color:"#f7c948"}}>{config.timerDuration||15}s</strong> to counter-bid after each bid.<br/>
       6. <strong style={{color:"#e74c3c"}}>Mandatory:</strong> At least <strong style={{color:"#f7c948"}}>{config.minWomen||2} women player(s)</strong> per team.<br/>
       7. Budget must reserve enough to fill minimum {config.minSquad||11} slots at base price.<br/>
-      8. Bidding blocked if team can't meet requirements.
+      8. Bidding blocked if team can't meet requirements.<br/>
+      9. <strong style={{color:"#e74c3c"}}>Team Restrictions:</strong><br/>
+      <span style={{paddingLeft:16,display:"inline-block"}}>• <strong style={{color:"#2980b9"}}>RCB, Remidio Power Star, Falcon, Strikers</strong> → HO employees only<br/></span>
+      <span style={{paddingLeft:16,display:"inline-block"}}>• <strong style={{color:"#8e44ad"}}>Remidio Rangers, Royal Warriors</strong> → Field employees only</span>
     </div>
     <button onClick={()=>setShowRules(false)} style={{...S.actionBtn,background:"#1e2d4a",color:"#7a8ea8",marginTop:14}}>Close</button>
   </div>);
@@ -240,7 +299,7 @@ function App() {
       <div style={{fontSize:13,color:"#27ae60",fontWeight:700,marginBottom:10}}>➕ ADD NEW PLAYER</div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:8}}>
         <div><div style={S.fl}>Name*</div><input value={apName} onChange={e=>setApName(e.target.value)} placeholder="Player name" style={S.fi}/></div>
-        <div><div style={S.fl}>Role</div><select value={apRole} onChange={e=>setApRole(e.target.value)} style={S.fi}><option>Batsman</option><option>All-Rounder</option><option>Bowler</option></select></div>
+        <div><div style={S.fl}>Role</div><select value={apRole} onChange={e=>setApRole(e.target.value)} style={S.fi}><option>Batsman</option><option>All-Rounder</option><option>Bowler</option><option>Wicket-Keeper</option></select></div>
         <div><div style={S.fl}>Gender</div><select value={apGender} onChange={e=>setApGender(e.target.value)} style={S.fi}><option value="M">Male</option><option value="F">Female</option></select></div>
         <div><div style={S.fl}>Department</div><input value={apDept} onChange={e=>setApDept(e.target.value)} placeholder="Dept" style={S.fi}/></div>
         <div><div style={S.fl}>Type</div><select value={apType} onChange={e=>setApType(e.target.value)} style={S.fi}><option value="HO">HO</option><option value="Field">Field</option></select></div>
@@ -254,7 +313,7 @@ function App() {
       <div style={{fontSize:13,color:"#f7c948",fontWeight:700,marginBottom:10}}>✏️ EDIT PLAYER</div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:8}}>
         <div><div style={S.fl}>Name</div><input value={epName} onChange={e=>setEpName(e.target.value)} style={S.fi}/></div>
-        <div><div style={S.fl}>Role</div><select value={epRole} onChange={e=>setEpRole(e.target.value)} style={S.fi}><option>Batsman</option><option>All-Rounder</option><option>Bowler</option></select></div>
+        <div><div style={S.fl}>Role</div><select value={epRole} onChange={e=>setEpRole(e.target.value)} style={S.fi}><option>Batsman</option><option>All-Rounder</option><option>Bowler</option><option>Wicket-Keeper</option></select></div>
         <div><div style={S.fl}>Gender</div><select value={epGender} onChange={e=>setEpGender(e.target.value)} style={S.fi}><option value="M">Male</option><option value="F">Female</option></select></div>
         <div><div style={S.fl}>Department</div><input value={epDept} onChange={e=>setEpDept(e.target.value)} style={S.fi}/></div>
         <div><div style={S.fl}>Type</div><select value={epType} onChange={e=>setEpType(e.target.value)} style={S.fi}><option value="HO">HO</option><option value="Field">Field</option></select></div>
@@ -292,9 +351,36 @@ function App() {
         </div>
       </div>);})}
     </div>
-  </div>);
 
-  // ── Player List (view only) ──
+    {/* Unsold Player Management */}
+    {state.unsoldIds.length>0&&(<div style={{marginTop:14}}>
+      <div style={{fontSize:13,color:"#c0392b",fontWeight:700,marginBottom:8}}>❌ UNSOLD PLAYERS ({state.unsoldIds.length})</div>
+      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+        {state.unsoldIds.map(pid=>{const p=getPlayer(pid);if(!p)return null;return(<div key={pid} style={{background:"#0d1320",border:"1px solid #c0392b33",borderRadius:8,padding:"10px 12px"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <span>{ROLE_ICON[p.role]}</span>
+              <span style={{fontSize:13,fontWeight:600}}>{p.name}{p.gender==="F"&&<span style={{color:"#e91e8f"}}> ♀</span>}</span>
+              <span style={{fontSize:10,color:"#5a6a88"}}>{p.dept} · {p.type}</span>
+            </div>
+            <button onClick={()=>reBidUnsold(pid)} style={{...S.actionBtn,background:"#f7c948",color:"#0b0f1a",fontSize:11,padding:"4px 12px"}}>🔄 Re-Auction</button>
+          </div>
+          <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+            <div style={{flex:1,minWidth:120}}>
+              <select value={unsoldAssignTeam[pid]||""} onChange={e=>setUnsoldAssignTeam({...unsoldAssignTeam,[pid]:e.target.value})} style={S.fi}>
+                <option value="">Assign to team...</option>
+                {state.teams.map(t=><option key={t.id} value={t.id}>{t.name} ({fmt(t.budget)})</option>)}
+              </select>
+            </div>
+            <div style={{width:100}}>
+              <input type="number" placeholder="Price" value={unsoldAssignPrice[pid]||""} onChange={e=>setUnsoldAssignPrice({...unsoldAssignPrice,[pid]:parseInt(e.target.value)||""})} style={S.fi} />
+            </div>
+            <button onClick={()=>assignUnsoldToTeam(pid)} disabled={!unsoldAssignTeam[pid]} style={{...S.actionBtn,background:unsoldAssignTeam[pid]?"#27ae60":"#2a3554",color:unsoldAssignTeam[pid]?"#fff":"#555",fontSize:11,padding:"6px 14px",cursor:unsoldAssignTeam[pid]?"pointer":"not-allowed"}}>Assign</button>
+          </div>
+        </div>);})}
+      </div>
+    </div>)}
+  </div>);
   const PlayerList=({showValue})=>{const filtered=getFilteredPlayers();return(<div>
     <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
       {[{k:"all",l:"All"},{k:"sold",l:`Sold (${totalSold})`},{k:"pending",l:`Pending (${totalPending})`},{k:"unsold",l:`Unsold (${totalUnsold})`},{k:"women",l:`Women (${players.filter(p=>p.gender==="F").length})`}].map(f=>(<button key={f.k} onClick={()=>setPlayerFilter(f.k)} style={{...S.pill,...(playerFilter===f.k?{background:"#f7c948",color:"#0b0f1a",borderColor:"#f7c948"}:{})}}>{f.l}</button>))}
@@ -316,7 +402,7 @@ function App() {
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:10,marginBottom:14}}>
         {[{k:"baseBudget",l:"Team Budget (₹)",i:"💰"},{k:"basePrice",l:"Base Price (₹)",i:"🏷️"},{k:"bidIncrement",l:"Increment (₹)",i:"📈"},{k:"minSquad",l:"Min Squad",i:"📋"},{k:"maxSquad",l:"Max Squad",i:"👥"},{k:"minWomen",l:"Min Women",i:"👩"},{k:"timerDuration",l:"Timer (sec)",i:"⏱️"}].map(f=>(<div key={f.k} style={{background:"#0d1320",border:"1px solid #1a253d",borderRadius:8,padding:"8px 12px"}}><div style={{fontSize:11,color:"#7a8ea8",marginBottom:4}}>{f.i} {f.l}</div><input type="number" value={lc[f.k]} onChange={e=>setLc({...lc,[f.k]:parseInt(e.target.value)||0})} style={{width:"100%",padding:"6px 8px",borderRadius:6,border:"1px solid #253554",background:"#131b2e",color:"#f7c948",fontSize:15,fontFamily:"'Oswald',sans-serif",fontWeight:700,outline:"none",boxSizing:"border-box"}} /></div>))}
       </div>
-      <div style={{display:"flex",alignItems:"center",gap:12}}><button onClick={async()=>{await updateConfig(lc);setMsg("Saved! Reset to apply.");setTimeout(()=>setMsg(""),3000);}} style={{...S.actionBtn,background:"#f7c948",color:"#0b0f1a"}}>Save</button><button onClick={()=>setConfigMgmt(false)} style={{...S.actionBtn,background:"#1e2d4a",color:"#7a8ea8"}}>Close</button>{msg&&<span style={{fontSize:12,color:"#27ae60",fontWeight:600}}>{msg}</span>}</div>
+      <div style={{display:"flex",alignItems:"center",gap:12}}><button onClick={async()=>{await updateConfig(lc);if(lc.baseBudget!==(config.baseBudget||1000000)){await updateTeamBudgets(lc.baseBudget);}setMsg("Saved & applied!");setTimeout(()=>setMsg(""),3000);}} style={{...S.actionBtn,background:"#f7c948",color:"#0b0f1a"}}>Save & Apply</button><button onClick={()=>setConfigMgmt(false)} style={{...S.actionBtn,background:"#1e2d4a",color:"#7a8ea8"}}>Close</button>{msg&&<span style={{fontSize:12,color:"#27ae60",fontWeight:600}}>{msg}</span>}</div>
     </div>);};
 
   // Password Modal

@@ -94,10 +94,13 @@ export const DEFAULT_PASSWORDS = {
   6: "orange@06",
 };
 
-export const ROLE_ICON = { Batsman: "🏏", "All-Rounder": "⭐", Bowler: "🎯" };
+export const ROLE_ICON = { Batsman: "🏏", "All-Rounder": "⭐", Bowler: "🎯", "Wicket-Keeper": "🧤" };
 export const BASE_PRICE = 50000;
 export const BID_INC = 5000;
 export const MAX_SQUAD = 15;
 export const MIN_SQUAD = 11;
 export const TIMER_DURATION = 15;
 export const MIN_WOMEN = 2;
+export const MIN_BATSMEN = 5;
+export const MIN_BOWLERS = 5;
+export const MIN_WK = 1;
